@@ -17,18 +17,25 @@ num_outputs = 3
 
 learning_rate_hp = 0.05
 momentum_hp = 0.9
-decay_hp = 5e-7
+decay_hp = 5e-5
 epsilon_hp = 1e-7
 rho_hp = 0.999
 beta_1_hp = 0.9
 beta_2_hp = 0.999
-
+L1_weight_hp = 0.0
+L1_bias_hp = 0.0
+L2_weight_hp = 5e-4
+L2_bias_hp = 5e-4
+dropout_rate = 0.1
 
    
 ''' INITIALIZE THE NETWORK '''
 # 2 inputs, 64 neurons in hidden layer
-dense1 = Layer_Dense(num_inputs, num_neurons)
+dense1 = Layer_Dense(num_inputs, num_neurons, L2_weight=L2_weight_hp, L2_bias=L2_bias_hp)
 activation1 = Activation_ReLU()
+
+# create dropout layer for the hidden layer (activation1)
+dropout1 = Layer_Dropout(dropout_rate)
 
 # dense2 is the output layer. 3 outputs since 3 classes
 dense2 = Layer_Dense(num_neurons, num_outputs)
@@ -50,10 +57,13 @@ optimizer = Optimizer_Adam(learning_rate=learning_rate_hp, decay=decay_hp,
 for epoch in range(epochs):
     dense1.forward(X)
     activation1.forward(dense1.output)
+    dropout1.forward(activation1.output)
 
-    dense2.forward(activation1.output)
+    dense2.forward(dropout1.output)
     #activation2.forward(dense2.output)
-    loss = loss_activation.forward(dense2.output, y)
+    data_loss = loss_activation.forward(dense2.output, y)
+    regularization_loss = loss_activation.loss.regularization_loss(dense1) + loss_activation.loss.regularization_loss(dense2)
+    loss = data_loss + regularization_loss
 
     # calculate the accuracy of output to targets
     predictions = np.argmax(loss_activation.output, axis=1)
@@ -65,15 +75,20 @@ for epoch in range(epochs):
     if not epoch % 100:
         # print the loss
         print("Epoch: ", epoch, " Accuracy: ", round(accuracy, 5), 
-              " Loss: ", round(loss,5), " LR: ", round(optimizer.current_learning_rate,5))
+              " Loss: ", round(loss,5), 
+              " Data loss: ", round(data_loss, 5),
+              " Regularization loss: ", round(regularization_loss, 5),
+              " LR: ", round(optimizer.current_learning_rate,5))
 
     # using the combined softmax / loss class for faster backprop
     # compute the gradients of the layer 2softmax inputs
     loss_activation.backward(loss_activation.output, y)
     # compute the gradients for layer 2 weights and biases, as well as gradients of layer 1 ReLU outputs
     dense2.backward(loss_activation.dinputs)
+    # compute the gradients for layer 1 dropout
+    dropout1.backward(dense2.dinputs)
     # compute the gradients for the layer 1 ReLU inputs
-    activation1.backward(dense2.dinputs)
+    activation1.backward(dropout1.dinputs)
     # compute the gradients for layer 1 weights and biases
     dense1.backward(activation1.dinputs)
 
@@ -101,4 +116,4 @@ if len(y.shape) == 2:
 
 accuracy = np.mean(predictions==y_test)
 
-print(" Accuracy: ", round(accuracy, 5), " Loss: ", round(loss,5))
+print("Validation performance:", " Accuracy: ", round(accuracy, 5), " Loss: ", round(loss,5))

@@ -1,21 +1,42 @@
 import numpy as np
 
 class Layer_Dense:
-    def __init__(self, n_inputs, n_neurons):
+    def __init__(self, n_inputs, n_neurons, L1_weight=0, L1_bias=0, 
+                 L2_weight=0, L2_bias=0):
         # initializing random weights with the shape of inputs*neurons
         # in comparison to neurons*inputs, which requires a transpose when multiplying by batched inputs
         # ideally want weights to start small -0.1 to 0.1
         self.weights = 0.01 * np.random.randn(n_inputs, n_neurons)
         self.biases = np.zeros((1, n_neurons))
+
+        self.L1_weight_regularization = L1_weight
+        self.L1_bias_regularization = L1_bias
+        self.L2_weight_regularization = L2_weight
+        self.L2_bias_regularization = L2_bias
+
     def forward(self, inputs):
-        self.output = np.dot(inputs, self.weights) + self.biases
         # for back propagation we need to remember what the inputs were
         self.input = inputs
+        self.output = np.dot(inputs, self.weights) + self.biases
     def backward(self, dvalues):
         self.dweights = np.dot(self.input.T, dvalues)
         self.dbiases = np.sum(dvalues, axis=0, keepdims=True)
         self.dinputs = np.dot(dvalues, self.weights.T)
-        
+
+        # account for regularization gradients
+        if self.L1_weight_regularization > 0:
+            dL1 = np.ones_like(self.weights)
+            dL1[self.weights < 0] = -1
+            self.dweights += self.L1_weight_regularization * dL1
+        if self.L1_bias_regularization > 0:
+            dL1 = np.ones_like(self.biases)
+            dL1[self.biases < 0] = -1
+            self.dbiases += self.L1_bias_regularization * dL1
+        if self.L2_weight_regularization > 0:
+            self.dweights += 2 * self.L2_weight_regularization * self.weights
+        if self.L2_bias_regularization > 0:
+            self.dbiases += 2 * self.L2_bias_regularization * self.biases
+
 class Activation_ReLU:
     def forward(self, inputs):
         self.output = np.maximum(0,inputs)
@@ -26,7 +47,6 @@ class Activation_ReLU:
         # zero the gradient where input to ReLU was negative
         self.dinputs[self.input <= 0] = 0
     
-        
 class Activation_Softmax:
     def forward(self, inputs):
         # subtract the max of each input set to prevent overflow when exponentiating by limiting max of exp to 1
@@ -45,12 +65,39 @@ class Activation_Softmax:
             jacobian_matrix = np.diagflat(single_output) - np.dot(single_output, single_output.T)
             # dot product the jacobian and dvalues for the particular sample, resulting in a vector of length #outputneurons
             self.dinputs[index] = np.dot(jacobian_matrix, single_dvalues)
-        
+
+class Layer_Dropout:
+    def __init__(self, rate):
+        # assume that the rate is the rate we want to drop (q)
+        # so invert to get p to simplify the code
+        self.rate = 1-rate
+    
+    def forward(self, inputs):
+        self.inputs = inputs
+        # store the binary mask for backward pass
+        self.binary_mask = np.random.binomial(1, self.rate, size=inputs.shape) / self.rate
+        self.output = inputs * self.binary_mask
+
+    def backward(self, dvalues):
+        self.dinputs = dvalues * self.binary_mask
+
 class Loss:
     def calculate(self, output, y):
         sample_losses = self.forward(output, y)
         data_loss = np.mean(sample_losses)
         return data_loss
+    def regularization_loss(self, layer):
+        regularization_loss = 0.0
+
+        if layer.L1_weight_regularization > 0:
+            regularization_loss += layer.L1_weight_regularization * np.sum(np.abs(layer.weights))
+        if layer.L1_bias_regularization > 0:
+            regularization_loss += layer.L1_bias_regularization * np.sum(np.abs(layer.biases))
+        if layer.L2_weight_regularization > 0:
+            regularization_loss += layer.L2_weight_regularization * np.sum(layer.weights ** 2)
+        if layer.L2_bias_regularization > 0:
+            regularization_loss += layer.L2_bias_regularization * np.sum(layer.biases ** 2)
+        return regularization_loss
     
 # inherit from base Loss class
 class Loss_CategoricalCrossEntropy(Loss):
@@ -161,7 +208,6 @@ class Optimizer_SGD:
     # call once after updating parameters in each epoch
     def post_update_params(self):
         self.iterations += 1
-
 
 class Optimizer_AdaGrad:
 
