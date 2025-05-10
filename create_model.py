@@ -64,7 +64,8 @@ for epoch in range(epochs):
 
     if not epoch % 100:
         # print the loss
-        print("Epoch: ", epoch, " Accuracy: ", accuracy, " Loss: ", loss, " LR: ", optimizer.current_learning_rate)
+        print("Epoch: ", epoch, " Accuracy: ", round(accuracy, 5), 
+              " Loss: ", round(loss,5), " LR: ", round(optimizer.current_learning_rate,5))
 
     # using the combined softmax / loss class for faster backprop
     # compute the gradients of the layer 2softmax inputs
@@ -85,3 +86,19 @@ for epoch in range(epochs):
     optimizer.post_update_params()
 
 
+
+''' VALIDATE DATA WITH FORWARD PASS '''
+X_test, y_test = spiral_data(samples=100, classes=3)
+dense1.forward(X_test)
+activation1.forward(dense1.output)
+dense2.forward(activation1.output)
+loss = loss_activation.forward(dense2.output, y_test)
+
+predictions = np.argmax(loss_activation.output, axis=1)
+# handle one-hot encoded output and convert to sparse
+if len(y.shape) == 2:
+    y = np.argmax(y, axis=1)
+
+accuracy = np.mean(predictions==y_test)
+
+print(" Accuracy: ", round(accuracy, 5), " Loss: ", round(loss,5))
