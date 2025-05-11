@@ -66,6 +66,14 @@ class Activation_Softmax:
             # dot product the jacobian and dvalues for the particular sample, resulting in a vector of length #outputneurons
             self.dinputs[index] = np.dot(jacobian_matrix, single_dvalues)
 
+class Activation_Linear:
+    def forward(self, inputs):
+        self.input = inputs
+        self.output = inputs
+    def bacward(self, dvalues):
+        # derivative of the linear function is just 1 so dvalues is not modified
+        self.dinputs = dvalues.copy()
+
 class Layer_Dropout:
     def __init__(self, rate):
         # assume that the rate is the rate we want to drop (q)
@@ -135,6 +143,32 @@ class Loss_CategoricalCrossEntropy(Loss):
         
         self.dinputs = -y_true / dvalues
         # normalize gradient by dividing by # samples
+        self.dinputs = self.dinputs / samples
+
+class Loss_MeanSquaredError(Loss):
+    def forward(self, y_pred, y_true):
+        # y_true and y_pred is array size #samples x #outputs
+        # scale by the number of samples to make it invariant to batch size
+        sample_losses = np.mean((y_true - y_pred) ** 2, axis=-1)
+        return sample_losses
+    def backward(self, dvalues, y_true):
+        samples = len(dvalues)
+        # get number of outputs in each sample to scale the partial derivatives
+        outputs = len(dvalues[0])
+        self.dinputs = -2.0 * (y_true - dvalues) / outputs
+        # and normalize again by number of samples
+        self.dinputs = self.dinputs / samples
+
+class Loss_MeanAbsoluteError(Loss):
+    def forward(self, y_pred, y_true):
+        sample_losses = np.mean(np.abs(y_true - y_pred), axis=-1)
+        return sample_losses
+    def backward(self, dvalues, y_true):
+        samples = len(dvalues)
+        outputs = len(dvalues[0])
+
+        # sign returns a 1 if y_true-dvalues>0, -1 if not
+        self.dinputs = np.sign(y_true - dvalues) / outputs
         self.dinputs = self.dinputs / samples
 
 # combined softmax activation and cross-entropy loss for a faster back propagation
