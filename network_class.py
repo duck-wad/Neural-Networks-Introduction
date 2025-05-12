@@ -5,8 +5,14 @@ class Layer_Dense:
                  L2_weight=0, L2_bias=0):
         # initializing random weights with the shape of inputs*neurons
         # in comparison to neurons*inputs, which requires a transpose when multiplying by batched inputs
-        # ideally want weights to start small -0.1 to 0.1
-        self.weights = 0.01 * np.random.randn(n_inputs, n_neurons)
+
+        # use the Xavier uniform to initialize the weights
+        # samples from the uniform distribution between [-limit, limit]
+        # limit is sqrt of 6 divided by sum of input and outputs to layer
+        limit = np.sqrt(6.0 / (n_inputs + n_neurons))
+        self.weights = np.random.uniform(-limit, limit, size=(n_inputs, n_neurons))
+
+        #self.weights = 0.01 * np.random.randn(n_inputs, n_neurons)
         self.biases = np.zeros((1, n_neurons))
 
         self.L1_weight_regularization = L1_weight
@@ -70,7 +76,7 @@ class Activation_Linear:
     def forward(self, inputs):
         self.input = inputs
         self.output = inputs
-    def bacward(self, dvalues):
+    def backward(self, dvalues):
         # derivative of the linear function is just 1 so dvalues is not modified
         self.dinputs = dvalues.copy()
 
